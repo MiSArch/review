@@ -1,0 +1,36 @@
+services:
+  review:
+    extends:
+      file: docker-compose-base.yaml
+      service: review
+    build:
+      context: .
+      dockerfile: devcontainer-dockerfile
+    ports:
+      - 8080:8080
+  review-db:
+    extends:
+      file: docker-compose-base.yaml
+      service: review-db
+  review-mongoexpress:
+    image: mongo-express
+    ports:
+      - 8081:8081
+    depends_on:
+      - review-db
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://review-db:27017
+  review-dapr:
+    extends:
+      file: docker-compose-base.yaml
+      service: review-dapr
+    volumes:
+      - "./.dapr/dapr-config-minimal.yaml:/config.yaml"
+      - "./.dapr/components:/components"
+  placement:
+    image: "daprio/dapr"
+    command: ["./placement", "-port", "50006"]
+    ports:
+      - 50006:50006
+volumes:
+  review-db-data:
