@@ -46,12 +46,13 @@ impl Mutation {
             _id: Uuid::new(),
             user: User { _id: input.user_id },
             product_variant: ProductVariant { _id: input.product_variant_id },
-            body: input.body,
+            body: input.body.clone(),
             rating: input.rating,
             created_at: current_timestamp,
             last_updated_at: current_timestamp,
             is_visible: input.is_visible.unwrap_or(true),
         };
+        review_is_already_written_by_user(&collection, &input).await?;
         match collection.insert_one(review, None).await {
             Ok(result) => {
                 let id = uuid_from_bson(result.inserted_id)?;
@@ -210,4 +211,27 @@ async fn validate_product_variant_id(
 /// Used before adding reviews.
 async fn validate_user(collection: &Collection<User>, id: Uuid) -> Result<()> {
     query_user(&collection, id).await.map(|_| ())
+}
+
+
+/// Throws an error if user has already written a review for the product variant.
+async fn review_is_already_written_by_user(collection: &Collection<Review>, input: &AddReviewInput) -> Result<()> {
+    let message = format!(
+        "User of UUID: `{}` has already written a review for product variant of UUID: `{}`.",
+        input.user_id,
+        input.product_variant_id
+    );
+    match collection
+        .find_one(
+            doc! {"_id": input.product_variant_id, "user._id": input.user_id },
+            None,
+        )
+        .await
+    {
+        Ok(maybe_product_variant) => match maybe_product_variant {
+            Some(_) => Err(Error::new(message)),
+            None => Ok(()),
+        },
+        Err(_) => Err(Error::new(message)),
+    }
 }
