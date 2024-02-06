@@ -1,9 +1,6 @@
-use std::collections::HashSet;
-
 use async_graphql::{Context, Error, Object, Result};
 use bson::Bson;
 use bson::Uuid;
-use futures::TryStreamExt;
 use mongodb::{
     bson::{doc, DateTime},
     Collection, Database,
@@ -59,17 +56,15 @@ impl Mutation {
     ) -> Result<Review> {
         let db_client = ctx.data_unchecked::<Database>();
         let collection: Collection<Review> = db_client.collection::<Review>("reviews");
-        let product_variant_collection: Collection<ProductVariant> =
-            db_client.collection::<ProductVariant>("product_variants");
         let current_timestamp = DateTime::now();
         update_body(
             &collection,
-            &product_variant_collection,
             &input,
             &current_timestamp,
         )
         .await?;
         update_rating(&collection, &input, &current_timestamp).await?;
+        update_visibility(&collection, &input, &current_timestamp).await?;
         let review = query_review(&collection, input.id).await?;
         Ok(review)
     }
@@ -106,54 +101,55 @@ fn uuid_from_bson(bson: Bson) -> Result<Uuid> {
     }
 }
 
-/// Updates product variant ids of a review.
+/// Updates body of a review.
 ///
 /// * `collection` - MongoDB collection to update.
 /// * `input` - `UpdateReviewInput`.
-async fn update_product_variant_ids(
+async fn update_body(
     collection: &Collection<Review>,
-    product_variant_collection: &Collection<ProductVariant>,
     input: &UpdateReviewInput,
     current_timestamp: &DateTime,
 ) -> Result<()> {
-    if let Some(definitely_product_variant_ids) = &input.product_variant_ids {
-        validate_product_variant_ids(&product_variant_collection, definitely_product_variant_ids)
-            .await?;
-        let normalized_product_variants: Vec<ProductVariant> = definitely_product_variant_ids
-            .iter()
-            .map(|id| ProductVariant { _id: id.clone() })
-            .collect();
-        if let Err(_) = collection.update_one(doc!{"_id": input.id }, doc!{"$set": {"internal_product_variants": normalized_product_variants, "last_updated_at": current_timestamp}}, None).await {
-            let message = format!("Updating product_variant_ids of review of id: `{}` failed in MongoDB.", input.id);
+    if let Some(definitely_body) = &input.body {
+        if let Err(_) = collection.update_one(doc!{"_id": input.id }, doc!{"$set": {"body": definitely_body, "last_updated_at": current_timestamp}}, None).await {
+            let message = format!("Updating body of review of id: `{}` failed in MongoDB.", input.id);
             return Err(Error::new(message))
         }
     }
     Ok(())
 }
 
-/// Updates name of a review.
+/// Updates rating of a review.
 ///
 /// * `collection` - MongoDB collection to update.
 /// * `input` - `UpdateReviewInput`.
-async fn update_name(
+async fn update_rating(
     collection: &Collection<Review>,
     input: &UpdateReviewInput,
     current_timestamp: &DateTime,
 ) -> Result<()> {
-    if let Some(definitely_name) = &input.name {
-        let result = collection
-            .update_one(
-                doc! {"_id": input.id },
-                doc! {"$set": {"name": definitely_name, "last_updated_at": current_timestamp}},
-                None,
-            )
-            .await;
-        if let Err(_) = result {
-            let message = format!(
-                "Updating name of review of id: `{}` failed in MongoDB.",
-                input.id
-            );
-            return Err(Error::new(message));
+    if let Some(definitely_rating) = &input.rating {
+        if let Err(_) = collection.update_one(doc!{"_id": input.id }, doc!{"$set": {"rating": definitely_rating, "last_updated_at": current_timestamp}}, None).await {
+            let message = format!("Updating rating of review of id: `{}` failed in MongoDB.", input.id);
+            return Err(Error::new(message))
+        }
+    }
+    Ok(())
+}
+
+/// Updates visibility of a review.
+///
+/// * `collection` - MongoDB collection to update.
+/// * `input` - `UpdateReviewInput`.
+async fn update_visibility(
+    collection: &Collection<Review>,
+    input: &UpdateReviewInput,
+    current_timestamp: &DateTime,
+) -> Result<()> {
+    if let Some(definitely_is_visible) = &input.is_visible {
+        if let Err(_) = collection.update_one(doc!{"_id": input.id }, doc!{"$set": {"is_visible": definitely_is_visible, "last_updated_at": current_timestamp}}, None).await {
+            let message = format!("Updating visibility of review of id: `{}` failed in MongoDB.", input.id);
+            return Err(Error::new(message))
         }
     }
     Ok(())
@@ -164,43 +160,37 @@ async fn validate_input(db_client: &Database, input: &AddReviewInput) -> Result<
     let product_variant_collection: Collection<ProductVariant> =
         db_client.collection::<ProductVariant>("product_variants");
     let user_collection: Collection<User> = db_client.collection::<User>("users");
-    validate_product_variant_ids(&product_variant_collection, &input.product_variant_ids).await?;
+    validate_product_variant_id(&product_variant_collection, input.product_variant_id).await?;
     validate_user(&user_collection, input.user_id).await?;
     Ok(())
 }
 
-/// Checks if product variants are in the system (MongoDB database populated with events).
+/// Checks if product variant in is in the system (MongoDB database populated with events).
 ///
-/// Used before adding or modifying product variants / reviews.
-async fn validate_product_variant_ids(
+/// Used before adding reviews.
+async fn validate_product_variant_id(
     collection: &Collection<ProductVariant>,
-    product_variant_ids: &HashSet<Uuid>,
+    product_variant_id: Uuid,
 ) -> Result<()> {
-    let product_variant_ids_vec: Vec<Uuid> = product_variant_ids.clone().into_iter().collect();
+    let message = format!(
+        "Product variant with the UUID: `{}` is not present in the system.",
+        product_variant_id
+    );
     match collection
-        .find(doc! {"_id": { "$in": &product_variant_ids_vec } }, None)
+        .find_one(
+            doc! {"_id": product_variant_id },
+            None,
+        )
         .await
     {
-        Ok(cursor) => {
-            let product_variants: Vec<ProductVariant> = cursor.try_collect().await?;
-            product_variant_ids_vec.iter().fold(Ok(()), |_, p| {
-                match product_variants.contains(&ProductVariant { _id: *p }) {
-                    true => Ok(()),
-                    false => {
-                        let message = format!(
-                            "Product variant with the UUID: `{}` is not present in the system.",
-                            p
-                        );
-                        Err(Error::new(message))
-                    }
-                }
-            })
-        }
-        Err(_) => Err(Error::new(
-            "Product variants with the specified UUIDs are not present in the system.",
-        )),
+        Ok(maybe_product_variant) => match maybe_product_variant {
+            Some(_) => Ok(()),
+            None => Err(Error::new(message)),
+        },
+        Err(_) => Err(Error::new(message)),
     }
 }
+
 
 /// Checks if user is in the system (MongoDB database populated with events).
 ///

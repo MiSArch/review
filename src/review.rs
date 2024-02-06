@@ -1,6 +1,6 @@
 use async_graphql::{Enum, SimpleObject};
-use bson::datetime::DateTime;
-use bson::Uuid;
+use bson::{datetime::DateTime, Bson};
+use bson::{doc, Uuid};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -35,3 +35,22 @@ pub enum Rating {
     FourStars = 4,
     FiveStars = 5,
 }
+
+impl Rating {
+    pub fn to_string(&self) -> String {
+        match self {
+            Rating::OneStars => "OneStars".to_string(),
+            Rating::TwoStars => "TwoStars".to_string(),
+            Rating::ThreeStars => "ThreeStars".to_string(),
+            Rating::FourStars => "FourStarst".to_string(),
+            Rating::FiveStars => "FiveStars".to_string(),
+        }
+    }
+}
+
+impl From<Rating> for Bson {
+    fn from(value: Rating) -> Self {
+        Bson::String(value.to_string())
+    }
+}
+

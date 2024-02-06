@@ -78,6 +78,9 @@ async fn dapr_connection(db_client: Database) {
         user_collection,
     };
 
+    //callback_service.add_user_to_mongodb(bson::Uuid::new()).await.unwrap();
+    //callback_service.add_product_variant_to_mongodb(bson::Uuid::new()).await.unwrap();
+
     info!("AppCallback server listening on: {}", addr);
     // Create a gRPC server with the callback_service.
     TonicServer::builder()
