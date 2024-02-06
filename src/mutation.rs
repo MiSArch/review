@@ -223,7 +223,7 @@ async fn review_is_already_written_by_user(collection: &Collection<Review>, inpu
     );
     match collection
         .find_one(
-            doc! {"_id": input.product_variant_id, "user._id": input.user_id },
+            doc! {"product_variant._id": input.product_variant_id, "user._id": input.user_id },
             None,
         )
         .await
