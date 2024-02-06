@@ -22,8 +22,6 @@ RUN cargo build --release --bin misarch-review
 # We do not need the Rust toolchain to run the binary!
 FROM debian:bookworm-slim AS runtime
 
-RUN apt update && apt install -y protobuf-compiler && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /misarch-review
 COPY --from=builder /misarch-review/target/release/misarch-review /usr/local/bin
 ENTRYPOINT ["/usr/local/bin/misarch-review"]
