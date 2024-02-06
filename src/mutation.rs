@@ -20,18 +20,6 @@ pub struct Mutation;
 
 #[Object]
 impl Mutation {
-    /// Entity resolver for user of specific id.
-    #[graphql(entity)]
-    async fn user_entity_resolver<'a>(
-        &self,
-        ctx: &Context<'a>,
-        #[graphql(desc = "UUID of user to retrieve.")] id: Uuid,
-    ) -> Result<User> {
-        let db_client = ctx.data_unchecked::<Database>();
-        let collection: Collection<User> = db_client.collection::<User>("users");
-        query_user(&collection, id).await
-    }
-
     /// Adds a review.
     async fn add_review<'a>(
         &self,
