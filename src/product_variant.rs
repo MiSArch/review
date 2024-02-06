@@ -13,7 +13,7 @@ use crate::{
     review_connection::ReviewConnection,
 };
 
-#[derive(Debug, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, SimpleObject)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Copy, Clone, SimpleObject)]
 #[graphql(complex)]
 pub struct ProductVariant {
     /// UUID of the product variant.
@@ -57,6 +57,20 @@ impl ProductVariant {
             }
             Err(_) => return Err(Error::new("Retrieving reviews failed in MongoDB.")),
         }
+    }
+
+    /// Retrieves average rating of product variant.
+    async fn average_rating<'a>(
+        &self,
+        ctx: &Context<'a>,
+    ) -> Result<f32> {
+        let review_connection = self.reviews(&ctx, None, None, None).await?;
+        let reviews = review_connection.nodes;
+        let accumulated_reviews =
+            reviews.iter().fold(0, |prev_r, r| prev_r + r.rating as i32) as f32;
+        let total_count = review_connection.total_count as f32;
+        let average_rating = accumulated_reviews / total_count;
+        Ok(average_rating)
     }
 }
 
