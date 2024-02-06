@@ -22,6 +22,8 @@ pub struct Review {
     pub rating: Rating,
     /// Timestamp when Review was created.
     pub created_at: DateTime,
+    /// Timestamp when Review was created.
+    pub last_updated_at: DateTime,
     /// Flag if review is visible,
     pub is_visible: bool,
     

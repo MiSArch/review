@@ -1,9 +1,17 @@
-use async_graphql::{ComplexObject, Context, SimpleObject, Result};
-use bson::{Uuid, doc, Bson};
+use std::cmp::Ordering;
+
+use async_graphql::{ComplexObject, Context, Error, Result, SimpleObject};
+use bson::{doc, Bson, Document, Uuid};
+use mongodb::{options::FindOptions, Collection, Database};
+use mongodb_cursor_pagination::{error::CursorError, FindResult, PaginatedCursor};
 use serde::{Deserialize, Serialize};
 
-use crate::{order_datatypes::ReviewOrderInput, review_connection::ReviewConnection};
-use std::{cmp::Ordering, hash::Hash};
+use crate::{
+    base_connection::{BaseConnection, FindResultWrapper},
+    order_datatypes::ReviewOrderInput,
+    review::Review,
+    review_connection::ReviewConnection,
+};
 
 #[derive(Debug, Serialize, Deserialize, Hash, Eq, PartialEq, Copy, Clone, SimpleObject)]
 #[graphql(complex)]
@@ -26,7 +34,29 @@ impl ProductVariant {
             ReviewOrderInput,
         >,
     ) -> Result<ReviewConnection> {
-        todo!();
+        let db_client = ctx.data_unchecked::<Database>();
+        let collection: Collection<Review> = db_client.collection::<Review>("reviews");
+        let review_order = order_by.unwrap_or_default();
+        let sorting_doc = doc! {review_order.field.unwrap_or_default().as_str(): i32::from(review_order.direction.unwrap_or_default())};
+        let find_options = FindOptions::builder()
+            .skip(skip)
+            .limit(first.map(|v| i64::from(v)))
+            .sort(sorting_doc)
+            .build();
+        let document_collection = collection.clone_with_type::<Document>();
+        let filter = doc! {"product_variant._id": self._id};
+        let maybe_find_results: Result<FindResult<Review>, CursorError> =
+            PaginatedCursor::new(Some(find_options.clone()), None, None)
+                .find(&document_collection, Some(&filter))
+                .await;
+        match maybe_find_results {
+            Ok(find_results) => {
+                let find_result_wrapper = FindResultWrapper(find_results);
+                let connection = Into::<BaseConnection<Review>>::into(find_result_wrapper);
+                Ok(Into::<ReviewConnection>::into(connection))
+            }
+            Err(_) => return Err(Error::new("Retrieving reviews failed in MongoDB.")),
+        }
     }
 }
 

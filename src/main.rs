@@ -34,6 +34,8 @@ use app_callback_service::AppCallbackService;
 mod user;
 use user::User;
 
+mod user_mutation;
+
 use product_variant::ProductVariant;
 mod product_variant;
 

@@ -4,8 +4,6 @@ use crate::review::Rating;
 
 #[derive(SimpleObject, InputObject)]
 pub struct AddReviewInput {
-    /// UUID of user owning the review.
-    pub user_id: Uuid,
     /// UUID of product variant in review.
     pub product_variant_id: Uuid,
     /// Body of Review.
