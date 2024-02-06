@@ -1,6 +1,6 @@
+use crate::review::Rating;
 use async_graphql::{InputObject, SimpleObject};
 use bson::Uuid;
-use crate::review::Rating;
 
 #[derive(SimpleObject, InputObject)]
 pub struct AddReviewInput {

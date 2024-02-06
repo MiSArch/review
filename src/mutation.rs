@@ -45,7 +45,9 @@ impl Mutation {
         let review = Review {
             _id: Uuid::new(),
             user: User { _id: input.user_id },
-            product_variant: ProductVariant { _id: input.product_variant_id },
+            product_variant: ProductVariant {
+                _id: input.product_variant_id,
+            },
             body: input.body.clone(),
             rating: input.rating,
             created_at: current_timestamp,
@@ -71,12 +73,7 @@ impl Mutation {
         let db_client = ctx.data_unchecked::<Database>();
         let collection: Collection<Review> = db_client.collection::<Review>("reviews");
         let current_timestamp = DateTime::now();
-        update_body(
-            &collection,
-            &input,
-            &current_timestamp,
-        )
-        .await?;
+        update_body(&collection, &input, &current_timestamp).await?;
         update_rating(&collection, &input, &current_timestamp).await?;
         update_visibility(&collection, &input, &current_timestamp).await?;
         let review = query_review(&collection, input.id).await?;
@@ -125,9 +122,19 @@ async fn update_body(
     current_timestamp: &DateTime,
 ) -> Result<()> {
     if let Some(definitely_body) = &input.body {
-        if let Err(_) = collection.update_one(doc!{"_id": input.id }, doc!{"$set": {"body": definitely_body, "last_updated_at": current_timestamp}}, None).await {
-            let message = format!("Updating body of review of id: `{}` failed in MongoDB.", input.id);
-            return Err(Error::new(message))
+        if let Err(_) = collection
+            .update_one(
+                doc! {"_id": input.id },
+                doc! {"$set": {"body": definitely_body, "last_updated_at": current_timestamp}},
+                None,
+            )
+            .await
+        {
+            let message = format!(
+                "Updating body of review of id: `{}` failed in MongoDB.",
+                input.id
+            );
+            return Err(Error::new(message));
         }
     }
     Ok(())
@@ -143,9 +150,19 @@ async fn update_rating(
     current_timestamp: &DateTime,
 ) -> Result<()> {
     if let Some(definitely_rating) = &input.rating {
-        if let Err(_) = collection.update_one(doc!{"_id": input.id }, doc!{"$set": {"rating": definitely_rating, "last_updated_at": current_timestamp}}, None).await {
-            let message = format!("Updating rating of review of id: `{}` failed in MongoDB.", input.id);
-            return Err(Error::new(message))
+        if let Err(_) = collection
+            .update_one(
+                doc! {"_id": input.id },
+                doc! {"$set": {"rating": definitely_rating, "last_updated_at": current_timestamp}},
+                None,
+            )
+            .await
+        {
+            let message = format!(
+                "Updating rating of review of id: `{}` failed in MongoDB.",
+                input.id
+            );
+            return Err(Error::new(message));
         }
     }
     Ok(())
@@ -191,10 +208,7 @@ async fn validate_product_variant_id(
         product_variant_id
     );
     match collection
-        .find_one(
-            doc! {"_id": product_variant_id },
-            None,
-        )
+        .find_one(doc! {"_id": product_variant_id }, None)
         .await
     {
         Ok(maybe_product_variant) => match maybe_product_variant {
@@ -205,7 +219,6 @@ async fn validate_product_variant_id(
     }
 }
 
-
 /// Checks if user is in the system (MongoDB database populated with events).
 ///
 /// Used before adding reviews.
@@ -213,13 +226,14 @@ async fn validate_user(collection: &Collection<User>, id: Uuid) -> Result<()> {
     query_user(&collection, id).await.map(|_| ())
 }
 
-
 /// Throws an error if user has already written a review for the product variant.
-async fn review_is_already_written_by_user(collection: &Collection<Review>, input: &AddReviewInput) -> Result<()> {
+async fn review_is_already_written_by_user(
+    collection: &Collection<Review>,
+    input: &AddReviewInput,
+) -> Result<()> {
     let message = format!(
         "User of UUID: `{}` has already written a review for product variant of UUID: `{}`.",
-        input.user_id,
-        input.product_variant_id
+        input.user_id, input.product_variant_id
     );
     match collection
         .find_one(

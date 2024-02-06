@@ -1,4 +1,11 @@
-use crate::{base_connection::{BaseConnection, FindResultWrapper}, order_datatypes::ReviewOrderInput, product_variant::ProductVariant, review_connection::ReviewConnection, user::User, Review};
+use crate::{
+    base_connection::{BaseConnection, FindResultWrapper},
+    order_datatypes::ReviewOrderInput,
+    product_variant::ProductVariant,
+    review_connection::ReviewConnection,
+    user::User,
+    Review,
+};
 use async_graphql::{Context, Error, Object, Result};
 
 use bson::{Document, Uuid};
@@ -30,7 +37,8 @@ impl Query {
         #[graphql(desc = "UUID of product variant to retrieve.")] id: Uuid,
     ) -> Result<ProductVariant> {
         let db_client = ctx.data_unchecked::<Database>();
-        let collection: Collection<ProductVariant> = db_client.collection::<ProductVariant>("product_variants");
+        let collection: Collection<ProductVariant> =
+            db_client.collection::<ProductVariant>("product_variants");
         query_product_variant(&collection, id).await
     }
 
@@ -126,7 +134,10 @@ pub async fn query_user(collection: &Collection<User>, id: Uuid) -> Result<User>
 ///
 /// * `connection` - MongoDB database connection.
 /// * `id` - UUID of product variant.
-pub async fn query_product_variant(collection: &Collection<ProductVariant>, id: Uuid) -> Result<ProductVariant> {
+pub async fn query_product_variant(
+    collection: &Collection<ProductVariant>,
+    id: Uuid,
+) -> Result<ProductVariant> {
     match collection.find_one(doc! {"_id": id }, None).await {
         Ok(maybe_product_variant) => match maybe_product_variant {
             Some(product_variant) => Ok(product_variant),

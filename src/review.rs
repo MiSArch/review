@@ -3,9 +3,7 @@ use bson::{datetime::DateTime, Bson};
 use bson::{doc, Uuid};
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    product_variant::ProductVariant, user::User
-};
+use crate::{product_variant::ProductVariant, user::User};
 
 /// The Review of a user.
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone, SimpleObject)]
@@ -26,7 +24,6 @@ pub struct Review {
     pub last_updated_at: DateTime,
     /// Flag if review is visible,
     pub is_visible: bool,
-    
 }
 
 #[derive(Enum, Copy, Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -55,4 +52,3 @@ impl From<Rating> for Bson {
         Bson::String(value.to_string())
     }
 }
-
