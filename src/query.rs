@@ -30,7 +30,7 @@ impl Query {
     }
 
     /// Entity resolver for product variant of specific id.
-    //#[graphql(entity)]
+    #[graphql(entity)]
     async fn product_variant_entity_resolver<'a>(
         &self,
         ctx: &Context<'a>,
