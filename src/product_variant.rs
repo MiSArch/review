@@ -60,17 +60,27 @@ impl ProductVariant {
     }
 
     /// Retrieves average rating of product variant.
-    async fn average_rating<'a>(
-        &self,
-        ctx: &Context<'a>,
-    ) -> Result<f32> {
+    /// 
+    /// Filters reviews with `is_visible == false` to exclude them from the average rating.
+    async fn average_rating<'a>(&self, ctx: &Context<'a>) -> Result<f32> {
         let review_connection = self.reviews(&ctx, None, None, None).await?;
         let reviews = review_connection.nodes;
-        let accumulated_reviews =
-            reviews.iter().fold(0, |prev_r, r| prev_r + r.rating as i32) as f32;
-        let total_count = review_connection.total_count as f32;
-        let average_rating = accumulated_reviews / total_count;
-        Ok(average_rating)
+        let (accumulated_reviews, total_count) = reviews.iter().filter(|r| r.is_visible).fold(
+            (0, 0),
+            |(prev_accumulated_reviews, prev_total_count), r| {
+                (
+                    prev_accumulated_reviews + r.rating as i32,
+                    prev_total_count + 1,
+                )
+            },
+        );
+        if total_count == 0 {
+            let message = format!("Average rating can not be calculated, no review exist for product variant of UUID: `{}`", self._id);
+            Err(Error::new(message))
+        } else {
+            let average_rating = accumulated_reviews as f32 / total_count as f32;
+            Ok(average_rating)
+        }
     }
 }
 
