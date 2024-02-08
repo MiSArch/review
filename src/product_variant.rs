@@ -75,7 +75,7 @@ impl ProductVariant {
             },
         );
         if total_count == 0 {
-            let message = format!("Average rating can not be calculated, no review exist for product variant of UUID: `{}`", self._id);
+            let message = format!("Average rating can not be calculated, no review exists for product variant of UUID: `{}`", self._id);
             Err(Error::new(message))
         } else {
             let average_rating = accumulated_reviews as f32 / total_count as f32;
