@@ -24,7 +24,7 @@ impl Query {
         ctx: &Context<'a>,
         #[graphql(desc = "UUID of user to retrieve.")] id: Uuid,
     ) -> Result<User> {
-        let db_client = ctx.data_unchecked::<Database>();
+        let db_client = ctx.data::<Database>()?;
         let collection: Collection<User> = db_client.collection::<User>("users");
         query_user(&collection, id).await
     }
@@ -36,7 +36,7 @@ impl Query {
         ctx: &Context<'a>,
         #[graphql(desc = "UUID of product variant to retrieve.")] id: Uuid,
     ) -> Result<ProductVariant> {
-        let db_client = ctx.data_unchecked::<Database>();
+        let db_client = ctx.data::<Database>()?;
         let collection: Collection<ProductVariant> =
             db_client.collection::<ProductVariant>("product_variants");
         query_product_variant(&collection, id).await
@@ -54,7 +54,7 @@ impl Query {
             ReviewOrderInput,
         >,
     ) -> Result<ReviewConnection> {
-        let db_client = ctx.data_unchecked::<Database>();
+        let db_client = ctx.data::<Database>()?;
         let collection: Collection<Review> = db_client.collection::<Review>("reviews");
         let review_order = order_by.unwrap_or_default();
         let sorting_doc = doc! {review_order.field.unwrap_or_default().as_str(): i32::from(review_order.direction.unwrap_or_default())};
@@ -84,7 +84,7 @@ impl Query {
         ctx: &Context<'a>,
         #[graphql(desc = "UUID of review to retrieve.")] id: Uuid,
     ) -> Result<Review> {
-        let db_client = ctx.data_unchecked::<Database>();
+        let db_client = ctx.data::<Database>()?;
         let collection: Collection<Review> = db_client.collection::<Review>("reviews");
         query_review(&collection, id).await
     }
@@ -99,12 +99,12 @@ pub async fn query_review(collection: &Collection<Review>, id: Uuid) -> Result<R
         Ok(maybe_review) => match maybe_review {
             Some(review) => Ok(review),
             None => {
-                let message = format!("Review with UUID id: `{}` not found.", id);
+                let message = format!("Review with UUID: `{}` not found.", id);
                 Err(Error::new(message))
             }
         },
         Err(_) => {
-            let message = format!("Review with UUID id: `{}` not found.", id);
+            let message = format!("Review with UUID: `{}` not found.", id);
             Err(Error::new(message))
         }
     }
@@ -119,12 +119,12 @@ pub async fn query_user(collection: &Collection<User>, id: Uuid) -> Result<User>
         Ok(maybe_user) => match maybe_user {
             Some(user) => Ok(user),
             None => {
-                let message = format!("User with UUID id: `{}` not found.", id);
+                let message = format!("User with UUID: `{}` not found.", id);
                 Err(Error::new(message))
             }
         },
         Err(_) => {
-            let message = format!("User with UUID id: `{}` not found.", id);
+            let message = format!("User with UUID: `{}` not found.", id);
             Err(Error::new(message))
         }
     }
@@ -142,12 +142,12 @@ pub async fn query_product_variant(
         Ok(maybe_product_variant) => match maybe_product_variant {
             Some(product_variant) => Ok(product_variant),
             None => {
-                let message = format!("ProductVariant with UUID id: `{}` not found.", id);
+                let message = format!("ProductVariant with UUID: `{}` not found.", id);
                 Err(Error::new(message))
             }
         },
         Err(_) => {
-            let message = format!("ProductVariant with UUID id: `{}` not found.", id);
+            let message = format!("ProductVariant with UUID: `{}` not found.", id);
             Err(Error::new(message))
         }
     }

@@ -3,11 +3,10 @@ use std::{env, fs::File, io::Write};
 use async_graphql::{
     extensions::Logger, http::GraphiQLSource, EmptySubscription, SDLExportOptions, Schema,
 };
-use async_graphql_axum::GraphQL;
+use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
+
 use axum::{
-    response::{self, IntoResponse},
-    routing::{get, post},
-    Router, Server,
+    extract::State, http::HeaderMap, response::{self, IntoResponse}, routing::{get, post}, Router, Server
 };
 use clap::{arg, command, Parser};
 use http_event_service::{list_topic_subscriptions, on_topic_event, HttpEventServiceState};
@@ -33,6 +32,9 @@ mod http_event_service;
 
 use product_variant::ProductVariant;
 mod product_variant;
+
+mod authentication;
+use authentication::AuthorizedUserHeader;
 
 mod base_connection;
 mod mutation_input_structs;
@@ -108,6 +110,22 @@ async fn main() -> std::io::Result<()> {
     Ok(())
 }
 
+/// Describes the handler for GraphQL requests.
+///
+/// Parses the "Authenticate-User" header and writes it in the context data of the specfic request.
+/// Then executes the GraphQL schema with the request.
+async fn graphql_handler(
+    State(schema): State<Schema<Query, Mutation, EmptySubscription>>,
+    headers: HeaderMap,
+    req: GraphQLRequest,
+) -> GraphQLResponse {
+    let mut req = req.into_inner();
+    if let Ok(authenticate_user_header) = AuthorizedUserHeader::try_from(&headers) {
+        req = req.data(authenticate_user_header);
+    }
+    schema.execute(req).await.into()
+}
+
 /// Starts review service on port 8000.
 async fn start_service() {
     let client = db_connection().await;
@@ -119,7 +137,9 @@ async fn start_service() {
         .enable_federation()
         .finish();
 
-    let graphiql = Router::new().route("/", get(graphiql).post_service(GraphQL::new(schema)));
+    let graphiql = Router::new()
+        .route("/", get(graphiql).post(graphql_handler))
+        .with_state(schema);
     let dapr_router = build_dapr_router(db_client).await;
     let app = Router::new().merge(graphiql).merge(dapr_router);
 
