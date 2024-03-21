@@ -6,11 +6,12 @@ use mongodb::{
     Collection, Database,
 };
 
+use crate::authentication::authenticate_user;
 use crate::product_variant::ProductVariant;
 use crate::query::query_user;
 use crate::user::User;
 use crate::{
-    mutation_input_structs::{AddReviewInput, UpdateReviewInput},
+    mutation_input_structs::{CreateReviewInput, UpdateReviewInput},
     query::query_review,
     review::Review,
 };
@@ -20,13 +21,14 @@ pub struct Mutation;
 
 #[Object]
 impl Mutation {
-    /// Adds a review.
-    async fn add_review<'a>(
+    /// Adds a review for a user and a product variant with a content, rating and visibility.
+    async fn create_review<'a>(
         &self,
         ctx: &Context<'a>,
-        #[graphql(desc = "AddReviewInput")] input: AddReviewInput,
+        #[graphql(desc = "CreateReviewInput")] input: CreateReviewInput,
     ) -> Result<Review> {
-        let db_client = ctx.data_unchecked::<Database>();
+        authenticate_user(&ctx, input.user_id)?;
+        let db_client = ctx.data::<Database>()?;
         let collection: Collection<Review> = db_client.collection::<Review>("reviews");
         validate_input(db_client, &input).await?;
         let current_timestamp = DateTime::now();
@@ -58,9 +60,11 @@ impl Mutation {
         ctx: &Context<'a>,
         #[graphql(desc = "UpdateReviewInput")] input: UpdateReviewInput,
     ) -> Result<Review> {
-        let db_client = ctx.data_unchecked::<Database>();
+        let db_client = ctx.data::<Database>()?;
         let collection: Collection<Review> = db_client.collection::<Review>("reviews");
         let current_timestamp = DateTime::now();
+        let review = query_review(&collection, input.id).await?;
+        authenticate_user(&ctx, review.user._id)?;
         update_body(&collection, &input, &current_timestamp).await?;
         update_rating(&collection, &input, &current_timestamp).await?;
         update_visibility(&collection, &input, &current_timestamp).await?;
@@ -74,8 +78,10 @@ impl Mutation {
         ctx: &Context<'a>,
         #[graphql(desc = "UUID of review to delete.")] id: Uuid,
     ) -> Result<bool> {
-        let db_client = ctx.data_unchecked::<Database>();
+        let db_client = ctx.data::<Database>()?;
         let collection: Collection<Review> = db_client.collection::<Review>("reviews");
+        let review = query_review(&collection, id).await?;
+        authenticate_user(&ctx, review.user._id)?;
         if let Err(_) = collection.delete_one(doc! {"_id": id }, None).await {
             let message = format!("Deleting review of id: `{}` failed in MongoDB.", id);
             return Err(Error::new(message));
@@ -174,8 +180,8 @@ async fn update_visibility(
     Ok(())
 }
 
-/// Checks if product variants and user in AddReviewInput are in the system (MongoDB database populated with events).
-async fn validate_input(db_client: &Database, input: &AddReviewInput) -> Result<()> {
+/// Checks if product variants and user in CreateReviewInput are in the system (MongoDB database populated with events).
+async fn validate_input(db_client: &Database, input: &CreateReviewInput) -> Result<()> {
     let product_variant_collection: Collection<ProductVariant> =
         db_client.collection::<ProductVariant>("product_variants");
     let user_collection: Collection<User> = db_client.collection::<User>("users");
@@ -217,7 +223,7 @@ async fn validate_user(collection: &Collection<User>, id: Uuid) -> Result<()> {
 /// Throws an error if user has already written a review for the product variant.
 async fn review_is_already_written_by_user(
     collection: &Collection<Review>,
-    input: &AddReviewInput,
+    input: &CreateReviewInput,
 ) -> Result<()> {
     let message = format!(
         "User of UUID: `{}` has already written a review for product variant of UUID: `{}`.",

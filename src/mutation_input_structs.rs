@@ -3,7 +3,7 @@ use async_graphql::{InputObject, SimpleObject};
 use bson::Uuid;
 
 #[derive(SimpleObject, InputObject)]
-pub struct AddReviewInput {
+pub struct CreateReviewInput {
     /// UUID of user owning the review.
     pub user_id: Uuid,
     /// UUID of product variant in review.

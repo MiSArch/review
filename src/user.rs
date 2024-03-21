@@ -33,7 +33,7 @@ impl User {
             ReviewOrderInput,
         >,
     ) -> Result<ReviewConnection> {
-        let db_client = ctx.data_unchecked::<Database>();
+        let db_client = ctx.data::<Database>()?;
         let collection: Collection<Review> = db_client.collection::<Review>("reviews");
         let review_order = order_by.unwrap_or_default();
         let sorting_doc = doc! {review_order.field.unwrap_or_default().as_str(): i32::from(review_order.direction.unwrap_or_default())};
