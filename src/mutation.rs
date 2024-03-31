@@ -8,11 +8,10 @@ use mongodb::{
 
 use crate::authentication::authenticate_user;
 use crate::product_variant::ProductVariant;
-use crate::query::query_user;
+use crate::query::query_object;
 use crate::user::User;
 use crate::{
     mutation_input_structs::{CreateReviewInput, UpdateReviewInput},
-    query::query_review,
     review::Review,
 };
 
@@ -29,26 +28,28 @@ impl Mutation {
     ) -> Result<Review> {
         authenticate_user(&ctx, input.user_id)?;
         let db_client = ctx.data::<Database>()?;
-        let collection: Collection<Review> = db_client.collection::<Review>("reviews");
+        let product_variant_collection: Collection<ProductVariant> =
+            db_client.collection::<ProductVariant>("product_variants");
+        let review_collection: Collection<Review> = db_client.collection::<Review>("reviews");
         validate_input(db_client, &input).await?;
         let current_timestamp = DateTime::now();
+        let product_variant =
+            query_object(&product_variant_collection, input.product_variant_id).await?;
         let review = Review {
             _id: Uuid::new(),
             user: User { _id: input.user_id },
-            product_variant: ProductVariant {
-                _id: input.product_variant_id,
-            },
+            product_variant,
             body: input.body.clone(),
             rating: input.rating,
             created_at: current_timestamp,
             last_updated_at: current_timestamp,
             is_visible: input.is_visible.unwrap_or(true),
         };
-        review_is_already_written_by_user(&collection, &input).await?;
-        match collection.insert_one(review, None).await {
+        review_is_already_written_by_user(&review_collection, &input).await?;
+        match review_collection.insert_one(review, None).await {
             Ok(result) => {
                 let id = uuid_from_bson(result.inserted_id)?;
-                query_review(&collection, id).await
+                query_object(&review_collection, id).await
             }
             Err(_) => Err(Error::new("Adding review failed in MongoDB.")),
         }
@@ -63,12 +64,12 @@ impl Mutation {
         let db_client = ctx.data::<Database>()?;
         let collection: Collection<Review> = db_client.collection::<Review>("reviews");
         let current_timestamp = DateTime::now();
-        let review = query_review(&collection, input.id).await?;
+        let review = query_object(&collection, input.id).await?;
         authenticate_user(&ctx, review.user._id)?;
         update_body(&collection, &input, &current_timestamp).await?;
         update_rating(&collection, &input, &current_timestamp).await?;
         update_visibility(&collection, &input, &current_timestamp).await?;
-        let review = query_review(&collection, input.id).await?;
+        let review = query_object(&collection, input.id).await?;
         Ok(review)
     }
 
@@ -80,7 +81,7 @@ impl Mutation {
     ) -> Result<bool> {
         let db_client = ctx.data::<Database>()?;
         let collection: Collection<Review> = db_client.collection::<Review>("reviews");
-        let review = query_review(&collection, id).await?;
+        let review = query_object(&collection, id).await?;
         authenticate_user(&ctx, review.user._id)?;
         if let Err(_) = collection.delete_one(doc! {"_id": id }, None).await {
             let message = format!("Deleting review of id: `{}` failed in MongoDB.", id);
@@ -217,7 +218,7 @@ async fn validate_product_variant_id(
 ///
 /// Used before adding reviews.
 async fn validate_user(collection: &Collection<User>, id: Uuid) -> Result<()> {
-    query_user(&collection, id).await.map(|_| ())
+    query_object(&collection, id).await.map(|_| ())
 }
 
 /// Throws an error if user has already written a review for the product variant.

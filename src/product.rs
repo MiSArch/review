@@ -1,5 +1,5 @@
 use async_graphql::{ComplexObject, Context, Error, Result, SimpleObject};
-use bson::{doc, Document, Uuid};
+use bson::{doc, Bson, Document, Uuid};
 use mongodb::{options::FindOptions, Collection, Database};
 use mongodb_cursor_pagination::{error::CursorError, FindResult, PaginatedCursor};
 use serde::{Deserialize, Serialize};
@@ -7,21 +7,21 @@ use serde::{Deserialize, Serialize};
 use crate::{
     base_connection::{BaseConnection, FindResultWrapper},
     order_datatypes::ReviewOrderInput,
+    product_variant::calculate_average_rating,
     review::Review,
     review_connection::ReviewConnection,
 };
 
-/// Type of a user owning reviews.
-#[derive(Debug, Serialize, Deserialize, Hash, Eq, PartialEq, Clone, SimpleObject)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Copy, Clone, SimpleObject)]
 #[graphql(complex)]
-pub struct User {
-    /// UUID of the user.
+pub struct Product {
+    /// UUID of the product.
     pub _id: Uuid,
 }
 
 #[ComplexObject]
-impl User {
-    /// Retrieves reviews of user.
+impl Product {
+    /// Retrieves reviews of product.
     async fn reviews<'a>(
         &self,
         ctx: &Context<'a>,
@@ -43,7 +43,7 @@ impl User {
             .sort(sorting_doc)
             .build();
         let document_collection = collection.clone_with_type::<Document>();
-        let filter = doc! {"user._id": self._id};
+        let filter = doc! {"product_variant.product_id": self._id};
         let maybe_find_results: Result<FindResult<Review>, CursorError> =
             PaginatedCursor::new(Some(find_options.clone()), None, None)
                 .find(&document_collection, Some(&filter))
@@ -57,10 +57,22 @@ impl User {
             Err(_) => return Err(Error::new("Retrieving reviews failed in MongoDB.")),
         }
     }
+
+    /// Retrieves average rating of product.
+    async fn average_rating<'a>(&self, ctx: &Context<'a>) -> Result<f32> {
+        let review_connection = self.reviews(&ctx, None, None, None).await?;
+        calculate_average_rating(review_connection).await
+    }
 }
 
-impl From<Uuid> for User {
+impl From<Product> for Bson {
+    fn from(value: Product) -> Self {
+        Bson::Document(doc!("_id": value._id))
+    }
+}
+
+impl From<Uuid> for Product {
     fn from(value: Uuid) -> Self {
-        User { _id: value }
+        Product { _id: value }
     }
 }

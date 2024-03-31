@@ -3,7 +3,7 @@ use async_graphql::SimpleObject;
 use crate::{base_connection::BaseConnection, review::Review};
 
 /// A connection of Reviews.
-#[derive(SimpleObject)]
+#[derive(Debug, SimpleObject, Clone)]
 #[graphql(shareable)]
 pub struct ReviewConnection {
     /// The resulting entities.
