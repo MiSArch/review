@@ -1,12 +1,7 @@
 use std::any::type_name;
 
 use crate::{
-    base_connection::{BaseConnection, FindResultWrapper},
-    order_datatypes::ReviewOrderInput,
-    product_variant::ProductVariant,
-    review_connection::ReviewConnection,
-    user::User,
-    Review,
+    base_connection::{BaseConnection, FindResultWrapper}, order_datatypes::ReviewOrderInput, product::Product, product_variant::ProductVariant, review_connection::ReviewConnection, user::User, Review
 };
 use async_graphql::{Context, Error, Object, Result};
 
@@ -38,10 +33,10 @@ impl Query {
         &self,
         ctx: &Context<'a>,
         #[graphql(desc = "UUID of product to retrieve.")] id: Uuid,
-    ) -> Result<ProductVariant> {
+    ) -> Result<Product> {
         let db_client = ctx.data::<Database>()?;
-        let collection: Collection<ProductVariant> =
-            db_client.collection::<ProductVariant>("product_variants");
+        let collection: Collection<Product> =
+            db_client.collection::<Product>("products");
         query_object(&collection, id).await
     }
 
