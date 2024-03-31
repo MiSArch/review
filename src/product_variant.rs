@@ -1,5 +1,3 @@
-use std::cmp::Ordering;
-
 use async_graphql::{ComplexObject, Context, Error, Result, SimpleObject};
 use bson::{doc, Bson, Document, Uuid};
 use mongodb::{options::FindOptions, Collection, Database};
@@ -8,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     base_connection::{BaseConnection, FindResultWrapper},
+    http_event_service::ProductVariantEventData,
     order_datatypes::ReviewOrderInput,
     review::Review,
     review_connection::ReviewConnection,
@@ -16,8 +15,11 @@ use crate::{
 #[derive(Debug, Serialize, Deserialize, PartialEq, Copy, Clone, SimpleObject)]
 #[graphql(complex)]
 pub struct ProductVariant {
-    /// UUID of the product variant.
+    /// Product variant UUID.
     pub _id: Uuid,
+    /// Associated product UUID.
+    #[graphql(skip)]
+    pub product_id: Uuid,
 }
 
 #[ComplexObject]
@@ -60,38 +62,49 @@ impl ProductVariant {
     }
 
     /// Retrieves average rating of product variant.
-    /// 
-    /// Filters reviews with `is_visible == false` to exclude them from the average rating.
     async fn average_rating<'a>(&self, ctx: &Context<'a>) -> Result<f32> {
         let review_connection = self.reviews(&ctx, None, None, None).await?;
-        let reviews = review_connection.nodes;
-        let (accumulated_reviews, total_count) = reviews.iter().filter(|r| r.is_visible).fold(
-            (0, 0),
-            |(prev_accumulated_reviews, prev_total_count), r| {
-                (
-                    prev_accumulated_reviews + r.rating as i32,
-                    prev_total_count + 1,
-                )
-            },
-        );
-        if total_count == 0 {
-            let message = format!("Average rating can not be calculated, no review exists for product variant of UUID: `{}`", self._id);
-            Err(Error::new(message))
-        } else {
-            let average_rating = accumulated_reviews as f32 / total_count as f32;
-            Ok(average_rating)
-        }
-    }
-}
-
-impl PartialOrd for ProductVariant {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self._id.partial_cmp(&other._id)
+        calculate_average_rating(review_connection).await
     }
 }
 
 impl From<ProductVariant> for Bson {
     fn from(value: ProductVariant) -> Self {
-        Bson::Document(doc!("_id": value._id))
+        Bson::Document(doc!("_id": value._id, "product_id": value.product_id))
+    }
+}
+
+impl From<ProductVariantEventData> for ProductVariant {
+    fn from(value: ProductVariantEventData) -> Self {
+        Self {
+            _id: value.id,
+            product_id: value.product_id,
+        }
+    }
+}
+
+/// Shared function to calculate average rating of a review connection.
+///
+/// Filters reviews with `is_visible == false` to exclude them from the average rating.
+pub async fn calculate_average_rating<'a>(review_connection: ReviewConnection) -> Result<f32> {
+    let reviews = review_connection.nodes.clone();
+    let (accumulated_reviews, total_count) = reviews.iter().filter(|r| r.is_visible).fold(
+        (0, 0),
+        |(prev_accumulated_reviews, prev_total_count), r| {
+            (
+                prev_accumulated_reviews + r.rating as i32,
+                prev_total_count + 1,
+            )
+        },
+    );
+    if total_count == 0 {
+        let message = format!(
+            "Average rating can not be calculated, no review exists in review connection:`{:?}`",
+            review_connection
+        );
+        Err(Error::new(message))
+    } else {
+        let average_rating = accumulated_reviews as f32 / total_count as f32;
+        Ok(average_rating)
     }
 }

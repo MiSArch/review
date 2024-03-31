@@ -6,10 +6,18 @@ use async_graphql::{
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 
 use axum::{
-    extract::State, http::HeaderMap, response::{self, IntoResponse}, routing::{get, post}, Router, Server
+    extract::State,
+    http::HeaderMap,
+    response::{self, IntoResponse},
+    routing::{get, post},
+    Router, Server,
 };
 use clap::{arg, command, Parser};
-use http_event_service::{list_topic_subscriptions, on_topic_event, HttpEventServiceState};
+use http_event_service::{
+    list_topic_subscriptions, on_product_variant_creation_event, on_topic_event,
+    HttpEventServiceState,
+};
+use product::Product;
 use simple_logger::SimpleLogger;
 
 use log::info;
@@ -32,6 +40,8 @@ mod http_event_service;
 
 use product_variant::ProductVariant;
 mod product_variant;
+
+mod product;
 
 mod authentication;
 use authentication::AuthorizedUserHeader;
@@ -67,6 +77,8 @@ async fn db_connection() -> Client {
 ///
 /// Adds endpoints to define pub/sub interaction with Dapr.
 async fn build_dapr_router(db_client: Database) -> Router {
+    let product_collection: mongodb::Collection<Product> =
+        db_client.collection::<Product>("products");
     let product_variant_collection: mongodb::Collection<ProductVariant> =
         db_client.collection::<ProductVariant>("product_variants");
     let user_collection: mongodb::Collection<User> = db_client.collection::<User>("users");
@@ -75,7 +87,12 @@ async fn build_dapr_router(db_client: Database) -> Router {
     let app = Router::new()
         .route("/dapr/subscribe", get(list_topic_subscriptions))
         .route("/on-topic-event", post(on_topic_event))
+        .route(
+            "/on-product-variant-creation-event",
+            post(on_product_variant_creation_event),
+        )
         .with_state(HttpEventServiceState {
+            product_collection,
             product_variant_collection,
             user_collection,
         });
