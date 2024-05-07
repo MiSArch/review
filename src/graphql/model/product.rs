@@ -4,12 +4,14 @@ use mongodb::{options::FindOptions, Collection, Database};
 use mongodb_cursor_pagination::{error::CursorError, FindResult, PaginatedCursor};
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    base_connection::{BaseConnection, FindResultWrapper},
+use super::{
+    connection::{
+        base_connection::{BaseConnection, FindResultWrapper},
+        review_connection::ReviewConnection,
+    },
     order_datatypes::ReviewOrderInput,
     product_variant::calculate_average_rating,
     review::Review,
-    review_connection::ReviewConnection,
 };
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Copy, Clone, SimpleObject)]

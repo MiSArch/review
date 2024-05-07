@@ -4,12 +4,15 @@ use mongodb::{options::FindOptions, Collection, Database};
 use mongodb_cursor_pagination::{error::CursorError, FindResult, PaginatedCursor};
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    base_connection::{BaseConnection, FindResultWrapper},
-    http_event_service::ProductVariantEventData,
+use crate::event::http_event_service::ProductVariantEventData;
+
+use super::{
+    connection::{
+        base_connection::{BaseConnection, FindResultWrapper},
+        review_connection::ReviewConnection,
+    },
     order_datatypes::ReviewOrderInput,
     review::Review,
-    review_connection::ReviewConnection,
 };
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Copy, Clone, SimpleObject)]
@@ -86,6 +89,8 @@ impl From<ProductVariantEventData> for ProductVariant {
 /// Shared function to calculate average rating of a review connection.
 ///
 /// Filters reviews with `is_visible == false` to exclude them from the average rating.
+///
+/// `review_connection` - Connection of reviews to calculate average rating for.
 pub async fn calculate_average_rating<'a>(review_connection: ReviewConnection) -> Result<f32> {
     let reviews = review_connection.nodes.clone();
     let (accumulated_reviews, total_count) = reviews.iter().filter(|r| r.is_visible).fold(

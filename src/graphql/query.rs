@@ -1,21 +1,29 @@
-use std::any::type_name;
-
-use crate::{
-    base_connection::{BaseConnection, FindResultWrapper}, order_datatypes::ReviewOrderInput, product::Product, product_variant::ProductVariant, review_connection::ReviewConnection, user::User, Review
-};
 use async_graphql::{Context, Error, Object, Result};
+use std::any::type_name;
 
 use bson::{Document, Uuid};
 use mongodb::{bson::doc, options::FindOptions, Collection, Database};
 use mongodb_cursor_pagination::{error::CursorError, FindResult, PaginatedCursor};
 use serde::Deserialize;
 
+use super::model::{
+    connection::{
+        base_connection::{BaseConnection, FindResultWrapper},
+        review_connection::ReviewConnection,
+    },
+    order_datatypes::ReviewOrderInput,
+    product::Product,
+    product_variant::ProductVariant,
+    review::Review,
+    user::User,
+};
+
 /// Describes GraphQL review queries.
 pub struct Query;
 
 #[Object]
 impl Query {
-    /// Entity resolver for user of specific id.
+    /// Entity resolver for user of specific UUID.
     #[graphql(entity)]
     async fn user_entity_resolver<'a>(
         &self,
@@ -27,7 +35,7 @@ impl Query {
         query_object(&collection, id).await
     }
 
-    /// Entity resolver for product of specific id.
+    /// Entity resolver for product of specific UUID.
     #[graphql(entity)]
     async fn product_entity_resolver<'a>(
         &self,
@@ -35,12 +43,11 @@ impl Query {
         #[graphql(desc = "UUID of product to retrieve.")] id: Uuid,
     ) -> Result<Product> {
         let db_client = ctx.data::<Database>()?;
-        let collection: Collection<Product> =
-            db_client.collection::<Product>("products");
+        let collection: Collection<Product> = db_client.collection::<Product>("products");
         query_object(&collection, id).await
     }
 
-    /// Entity resolver for product variant of specific id.
+    /// Entity resolver for product variant of specific UUID.
     #[graphql(entity)]
     async fn product_variant_entity_resolver<'a>(
         &self,
@@ -89,7 +96,7 @@ impl Query {
         }
     }
 
-    /// Retrieves review of specific id.
+    /// Retrieves review of specific UUID.
     async fn review<'a>(
         &self,
         ctx: &Context<'a>,
@@ -101,7 +108,7 @@ impl Query {
     }
 }
 
-/// Shared function to query an object: T from a MongoDB collection of object: T.
+/// Shared function to query an object: `T` from a MongoDB collection of object: `T`.
 ///
 /// * `connection` - MongoDB database connection.
 /// * `id` - UUID of object.

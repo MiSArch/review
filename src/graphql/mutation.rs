@@ -6,14 +6,14 @@ use mongodb::{
     Collection, Database,
 };
 
-use crate::authentication::authenticate_user;
-use crate::product_variant::ProductVariant;
-use crate::query::query_object;
-use crate::user::User;
-use crate::{
-    mutation_input_structs::{CreateReviewInput, UpdateReviewInput},
-    review::Review,
-};
+use crate::authorization::authorize_user;
+
+use super::model::product_variant::ProductVariant;
+use super::model::review::Review;
+use super::model::user::User;
+use super::mutation_input_structs::CreateReviewInput;
+use super::mutation_input_structs::UpdateReviewInput;
+use super::query::query_object;
 
 /// Describes GraphQL review mutations.
 pub struct Mutation;
@@ -26,7 +26,7 @@ impl Mutation {
         ctx: &Context<'a>,
         #[graphql(desc = "CreateReviewInput")] input: CreateReviewInput,
     ) -> Result<Review> {
-        authenticate_user(&ctx, input.user_id)?;
+        authorize_user(&ctx, Some(input.user_id))?;
         let db_client = ctx.data::<Database>()?;
         let product_variant_collection: Collection<ProductVariant> =
             db_client.collection::<ProductVariant>("product_variants");
@@ -55,7 +55,7 @@ impl Mutation {
         }
     }
 
-    /// Updates a specific review referenced with an id.
+    /// Updates a specific review referenced with an UUID.
     async fn update_review<'a>(
         &self,
         ctx: &Context<'a>,
@@ -65,7 +65,7 @@ impl Mutation {
         let collection: Collection<Review> = db_client.collection::<Review>("reviews");
         let current_timestamp = DateTime::now();
         let review = query_object(&collection, input.id).await?;
-        authenticate_user(&ctx, review.user._id)?;
+        authorize_user(&ctx, Some(review.user._id))?;
         update_body(&collection, &input, &current_timestamp).await?;
         update_rating(&collection, &input, &current_timestamp).await?;
         update_visibility(&collection, &input, &current_timestamp).await?;
@@ -73,7 +73,7 @@ impl Mutation {
         Ok(review)
     }
 
-    /// Deletes review of id.
+    /// Deletes review of UUID.
     async fn delete_review<'a>(
         &self,
         ctx: &Context<'a>,
@@ -82,7 +82,7 @@ impl Mutation {
         let db_client = ctx.data::<Database>()?;
         let collection: Collection<Review> = db_client.collection::<Review>("reviews");
         let review = query_object(&collection, id).await?;
-        authenticate_user(&ctx, review.user._id)?;
+        authorize_user(&ctx, Some(review.user._id))?;
         if let Err(_) = collection.delete_one(doc! {"_id": id }, None).await {
             let message = format!("Deleting review of id: `{}` failed in MongoDB.", id);
             return Err(Error::new(message));
@@ -91,9 +91,9 @@ impl Mutation {
     }
 }
 
-/// Extracts UUID from Bson.
+/// Extracts UUID from BSON.
 ///
-/// Adding a review returns a UUID in a Bson document. This function helps to extract the UUID.
+/// Adding a review returns a UUID in a BSON document. This function helps to extract the UUID.
 fn uuid_from_bson(bson: Bson) -> Result<Uuid> {
     match bson {
         Bson::Binary(id) => Ok(id.to_uuid()?),
@@ -110,7 +110,8 @@ fn uuid_from_bson(bson: Bson) -> Result<Uuid> {
 /// Updates body of a review.
 ///
 /// * `collection` - MongoDB collection to update.
-/// * `input` - `UpdateReviewInput`.
+/// * `input` - Update review input containing modified body.
+/// * `current_timestamp` - Timestamp of review body update.
 async fn update_body(
     collection: &Collection<Review>,
     input: &UpdateReviewInput,
@@ -138,7 +139,8 @@ async fn update_body(
 /// Updates rating of a review.
 ///
 /// * `collection` - MongoDB collection to update.
-/// * `input` - `UpdateReviewInput`.
+/// * `input` - Update review input containing new rating.
+/// * `current_timestamp` - Timestamp of review rating update.
 async fn update_rating(
     collection: &Collection<Review>,
     input: &UpdateReviewInput,
@@ -166,7 +168,8 @@ async fn update_rating(
 /// Updates visibility of a review.
 ///
 /// * `collection` - MongoDB collection to update.
-/// * `input` - `UpdateReviewInput`.
+/// * `input` - Update review input containing new visibility.
+/// * `current_timestamp` - Timestamp of review visibility update.
 async fn update_visibility(
     collection: &Collection<Review>,
     input: &UpdateReviewInput,
@@ -182,6 +185,9 @@ async fn update_visibility(
 }
 
 /// Checks if product variants and user in CreateReviewInput are in the system (MongoDB database populated with events).
+///
+/// * `db_client` - MongoDB database client.
+/// * `input` - Create review input containing information to create review.
 async fn validate_input(db_client: &Database, input: &CreateReviewInput) -> Result<()> {
     let product_variant_collection: Collection<ProductVariant> =
         db_client.collection::<ProductVariant>("product_variants");
@@ -194,6 +200,9 @@ async fn validate_input(db_client: &Database, input: &CreateReviewInput) -> Resu
 /// Checks if product variant in is in the system (MongoDB database populated with events).
 ///
 /// Used before adding reviews.
+///
+/// * `collection` - MongoDB collection to validate against.
+/// * `product_variant_id` - Product variant UUID to validate.
 async fn validate_product_variant_id(
     collection: &Collection<ProductVariant>,
     product_variant_id: Uuid,
@@ -217,11 +226,17 @@ async fn validate_product_variant_id(
 /// Checks if user is in the system (MongoDB database populated with events).
 ///
 /// Used before adding reviews.
+///
+/// * `collection` - MongoDB collection to validate against.
+/// * `id` - User UUID to validate.
 async fn validate_user(collection: &Collection<User>, id: Uuid) -> Result<()> {
     query_object(&collection, id).await.map(|_| ())
 }
 
 /// Throws an error if user has already written a review for the product variant.
+///
+/// * `collection` - MongoDB collection to check against.
+/// * `input` - Create review input containing user UUID and product variant UUID to check.
 async fn review_is_already_written_by_user(
     collection: &Collection<Review>,
     input: &CreateReviewInput,

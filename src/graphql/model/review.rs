@@ -3,24 +3,25 @@ use bson::{datetime::DateTime, Bson};
 use bson::{doc, Uuid};
 use serde::{Deserialize, Serialize};
 
-use crate::{product_variant::ProductVariant, user::User};
+use super::product_variant::ProductVariant;
+use super::user::User;
 
-/// The Review of a user.
+/// The review of a user.
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone, SimpleObject)]
 pub struct Review {
-    /// Review UUID.
+    /// review UUID.
     pub _id: Uuid,
     /// User.
     pub user: User,
     /// Product variant that review is about.
     pub product_variant: ProductVariant,
-    /// Body of Review.
+    /// Body of review.
     pub body: String,
-    /// Rating of Review in 1-5 stars.
+    /// Rating of review in 1-5 stars.
     pub rating: Rating,
-    /// Timestamp when Review was created.
+    /// Timestamp when review was created.
     pub created_at: DateTime,
-    /// Timestamp when Review was created.
+    /// Timestamp when review was created.
     pub last_updated_at: DateTime,
     /// Flag if review is visible,
     pub is_visible: bool,
@@ -36,6 +37,7 @@ pub enum Rating {
 }
 
 impl Rating {
+    /// Converts enum value to string.
     pub fn to_string(&self) -> String {
         match self {
             Rating::OneStars => "OneStars".to_string(),

@@ -1,8 +1,8 @@
 use async_graphql::SimpleObject;
 
-use crate::{base_connection::BaseConnection, review::Review};
+use super::{super::review::Review, base_connection::BaseConnection};
 
-/// A connection of Reviews.
+/// A connection of reviews.
 #[derive(Debug, SimpleObject, Clone)]
 #[graphql(shareable)]
 pub struct ReviewConnection {
@@ -14,7 +14,7 @@ pub struct ReviewConnection {
     pub total_count: u64,
 }
 
-/// Implementation of conversion from BaseConnection<Review> to ReviewConnection.
+/// Implementation of conversion from `BaseConnection<Review>` to `ReviewConnection`.
 ///
 /// Prevents GraphQL naming conflicts.
 impl From<BaseConnection<Review>> for ReviewConnection {
