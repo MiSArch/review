@@ -93,15 +93,16 @@ impl From<ProductVariantEventData> for ProductVariant {
 /// `review_connection` - Connection of reviews to calculate average rating for.
 pub async fn calculate_average_rating<'a>(review_connection: ReviewConnection) -> Result<f32> {
     let reviews = review_connection.nodes.clone();
-    let (accumulated_reviews, total_count) = reviews.iter().filter(|review| review.is_visible).fold(
-        (0, 0),
-        |(prev_accumulated_reviews, prev_total_count), review| {
-            (
-                prev_accumulated_reviews + review.rating as i32,
-                prev_total_count + 1,
-            )
-        },
-    );
+    let (accumulated_reviews, total_count) =
+        reviews.iter().filter(|review| review.is_visible).fold(
+            (0, 0),
+            |(prev_accumulated_reviews, prev_total_count), review| {
+                (
+                    prev_accumulated_reviews + review.rating as i32,
+                    prev_total_count + 1,
+                )
+            },
+        );
     if total_count == 0 {
         let message = format!(
             "Average rating can not be calculated, no review exists in review connection:`{:?}`",
