@@ -4,12 +4,15 @@ use mongodb::{options::FindOptions, Collection, Database};
 use mongodb_cursor_pagination::{error::CursorError, FindResult, PaginatedCursor};
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    base_connection::{BaseConnection, FindResultWrapper},
-    http_event_service::ProductVariantEventData,
+use crate::event::http_event_service::ProductVariantEventData;
+
+use super::{
+    connection::{
+        base_connection::{BaseConnection, FindResultWrapper},
+        review_connection::ReviewConnection,
+    },
     order_datatypes::ReviewOrderInput,
     review::Review,
-    review_connection::ReviewConnection,
 };
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Copy, Clone, SimpleObject)]
@@ -42,7 +45,7 @@ impl ProductVariant {
         let sorting_doc = doc! {review_order.field.unwrap_or_default().as_str(): i32::from(review_order.direction.unwrap_or_default())};
         let find_options = FindOptions::builder()
             .skip(skip)
-            .limit(first.map(|v| i64::from(v)))
+            .limit(first.map(|definitely_first| i64::from(definitely_first)))
             .sort(sorting_doc)
             .build();
         let document_collection = collection.clone_with_type::<Document>();
@@ -86,17 +89,20 @@ impl From<ProductVariantEventData> for ProductVariant {
 /// Shared function to calculate average rating of a review connection.
 ///
 /// Filters reviews with `is_visible == false` to exclude them from the average rating.
+///
+/// `review_connection` - Connection of reviews to calculate average rating for.
 pub async fn calculate_average_rating<'a>(review_connection: ReviewConnection) -> Result<f32> {
     let reviews = review_connection.nodes.clone();
-    let (accumulated_reviews, total_count) = reviews.iter().filter(|r| r.is_visible).fold(
-        (0, 0),
-        |(prev_accumulated_reviews, prev_total_count), r| {
-            (
-                prev_accumulated_reviews + r.rating as i32,
-                prev_total_count + 1,
-            )
-        },
-    );
+    let (accumulated_reviews, total_count) =
+        reviews.iter().filter(|review| review.is_visible).fold(
+            (0, 0),
+            |(prev_accumulated_reviews, prev_total_count), review| {
+                (
+                    prev_accumulated_reviews + review.rating as i32,
+                    prev_total_count + 1,
+                )
+            },
+        );
     if total_count == 0 {
         let message = format!(
             "Average rating can not be calculated, no review exists in review connection:`{:?}`",

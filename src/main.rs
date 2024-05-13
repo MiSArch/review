@@ -5,6 +5,7 @@ use async_graphql::{
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 
+use authorization::AuthorizedUserHeader;
 use axum::{
     extract::State,
     http::{header::HeaderMap, StatusCode},
@@ -13,43 +14,20 @@ use axum::{
     Router, Server,
 };
 use clap::{arg, command, Parser};
-use http_event_service::{
+use event::http_event_service::{
     list_topic_subscriptions, on_product_variant_creation_event, on_topic_event,
     HttpEventServiceState,
 };
-use product::Product;
-use simple_logger::SimpleLogger;
+use graphql::model::{product::Product, product_variant::ProductVariant, user::User};
 
-use log::info;
+use log::{info, Level};
 use mongodb::{options::ClientOptions, Client, Database};
 
-use review::Review;
+use crate::graphql::{mutation::Mutation, query::Query};
 
-mod review;
-
-mod query;
-use query::Query;
-
-mod mutation;
-use mutation::Mutation;
-
-mod user;
-use user::User;
-
-mod http_event_service;
-
-use product_variant::ProductVariant;
-mod product_variant;
-
-mod product;
-
-mod authentication;
-use authentication::AuthorizedUserHeader;
-
-mod base_connection;
-mod mutation_input_structs;
-mod order_datatypes;
-mod review_connection;
+mod authorization;
+mod event;
+mod graphql;
 
 /// Builds the GraphiQL frontend.
 async fn graphiql() -> impl IntoResponse {
@@ -76,6 +54,8 @@ async fn db_connection() -> Client {
 /// Returns Router that establishes connection to Dapr.
 ///
 /// Adds endpoints to define pub/sub interaction with Dapr.
+///
+/// * `db_client` - MongoDB database client.
 async fn build_dapr_router(db_client: Database) -> Router {
     let product_collection: mongodb::Collection<Product> =
         db_client.collection::<Product>("products");
@@ -111,7 +91,7 @@ struct Args {
 /// Activates logger and parses argument for optional schema generation. Otherwise starts gRPC and GraphQL server.
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
-    SimpleLogger::new().init().unwrap();
+    simple_logger::init_with_level(Level::Warn).unwrap();
 
     let args = Args::parse();
     if args.generate_schema {
@@ -129,8 +109,12 @@ async fn main() -> std::io::Result<()> {
 
 /// Describes the handler for GraphQL requests.
 ///
-/// Parses the "Authenticate-User" header and writes it in the context data of the specfic request.
+/// Parses the `Authorized-User` header and writes it in the context data of the specfic request.
 /// Then executes the GraphQL schema with the request.
+///
+/// * `schema` - GraphQL schema used by handler.
+/// * `headers` - Header map containing headers of request.
+/// * `request` - GraphQL request.
 async fn graphql_handler(
     State(schema): State<Schema<Query, Mutation, EmptySubscription>>,
     headers: HeaderMap,

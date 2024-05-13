@@ -4,7 +4,7 @@ use log::info;
 use mongodb::Collection;
 use serde::{Deserialize, Serialize};
 
-use crate::{product::Product, product_variant::ProductVariant, user::User};
+use crate::graphql::model::{product::Product, product_variant::ProductVariant, user::User};
 
 /// Data to send to Dapr in order to describe a subscription.
 #[derive(Serialize)]
@@ -28,14 +28,14 @@ impl Default for TopicEventResponse {
     }
 }
 
-/// Relevant part of Dapr event wrapped in a CloudEnvelope.
+/// Relevant part of Dapr event wrapped in a cloud envelope.
 #[derive(Deserialize, Debug)]
 pub struct Event<T> {
     pub topic: String,
     pub data: T,
 }
 
-/// Relevant part of Dapr event.data.
+/// Relevant part of Dapr event data.
 #[derive(Deserialize, Debug)]
 pub struct EventData {
     pub id: Uuid,
@@ -43,6 +43,7 @@ pub struct EventData {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
+/// Relevant part of product variant creation event data.
 pub struct ProductVariantEventData {
     /// Product variant UUID.
     pub id: Uuid,
@@ -83,6 +84,9 @@ pub async fn list_topic_subscriptions() -> Result<Json<Vec<Pubsub>>, StatusCode>
 }
 
 /// HTTP endpoint to receive events.
+///
+/// * `state` - Service state containing database connections.
+/// * `event` - Event handled by endpoint.
 #[debug_handler(state = HttpEventServiceState)]
 pub async fn on_topic_event(
     State(state): State<HttpEventServiceState>,
@@ -101,6 +105,9 @@ pub async fn on_topic_event(
 }
 
 /// HTTP endpoint to product variant creation events.
+///
+/// * `state` - Service state containing database connections.
+/// * `event` - Event handled by endpoint.
 #[debug_handler(state = HttpEventServiceState)]
 pub async fn on_product_variant_creation_event(
     State(state): State<HttpEventServiceState>,
@@ -120,6 +127,9 @@ pub async fn on_product_variant_creation_event(
 }
 
 /// Add a newly created product variant to MongoDB.
+///
+/// * `collection` - MongoDB collection to add newly created product variant to.
+/// * `product_variant` - Newly created product variant.
 pub async fn add_product_variant_to_mongodb(
     collection: &Collection<ProductVariant>,
     product_variant: ProductVariant,
@@ -130,7 +140,10 @@ pub async fn add_product_variant_to_mongodb(
     }
 }
 
-/// Create a new object: T in MongoDB.
+/// Create a new object: `T` in MongoDB.
+///
+/// * `collection` - MongoDB collection to add newly created object to.
+/// * `id` - UUID of newly created object.
 pub async fn create_in_mongodb<T: Serialize + From<Uuid>>(
     collection: &Collection<T>,
     id: Uuid,
