@@ -46,13 +46,7 @@ impl Mutation {
             is_visible: input.is_visible.unwrap_or(true),
         };
         review_is_already_written_by_user(&review_collection, &input).await?;
-        match review_collection.insert_one(review, None).await {
-            Ok(result) => {
-                let id = uuid_from_bson(result.inserted_id)?;
-                query_object(&review_collection, id).await
-            }
-            Err(_) => Err(Error::new("Adding review failed in MongoDB.")),
-        }
+        insert_review_in_mongodb(&review_collection, review).await
     }
 
     /// Updates a specific review referenced with an UUID.
@@ -104,6 +98,23 @@ fn uuid_from_bson(bson: Bson) -> Result<Uuid> {
             );
             Err(Error::new(message))
         }
+    }
+}
+
+/// Inserts review in MongoDB and returns the review itself.
+///
+/// * `collection` - MongoDB collection to insert review in.
+/// * `review` - Review to insert.
+async fn insert_review_in_mongodb(
+    collection: &Collection<Review>,
+    review: Review,
+) -> Result<Review> {
+    match collection.insert_one(review, None).await {
+        Ok(result) => {
+            let id = uuid_from_bson(result.inserted_id)?;
+            query_object(&collection, id).await
+        }
+        Err(_) => Err(Error::new("Adding review failed in MongoDB.")),
     }
 }
 
@@ -184,7 +195,7 @@ async fn update_visibility(
     Ok(())
 }
 
-/// Checks if product variants and user in CreateReviewInput are in the system (MongoDB database populated with events).
+/// Checks if product variants and user in create review input are in the system (MongoDB database populated with events).
 ///
 /// * `db_client` - MongoDB database client.
 /// * `input` - Create review input containing information to create review.
