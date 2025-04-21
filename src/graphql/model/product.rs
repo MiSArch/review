@@ -61,9 +61,11 @@ impl Product {
     }
 
     /// Retrieves average rating of product.
-    async fn average_rating<'a>(&self, ctx: &Context<'a>) -> Result<f32> {
-        let review_connection = self.reviews(&ctx, None, None, None).await?;
-        calculate_average_rating(review_connection).await
+    async fn average_rating<'a>(&self, ctx: &Context<'a>) -> Option<f32> {
+        match self.reviews(ctx, None, None, None).await {
+            Ok(review_connection) => calculate_average_rating(review_connection).await,
+            Err(_) => None,
+        }
     }
 }
 

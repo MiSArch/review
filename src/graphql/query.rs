@@ -29,10 +29,10 @@ impl Query {
         &self,
         ctx: &Context<'a>,
         #[graphql(desc = "UUID of user to retrieve.")] id: Uuid,
-    ) -> Result<User> {
+    ) -> Result<Option<User>> {
         let db_client = ctx.data::<Database>()?;
         let collection: Collection<User> = db_client.collection::<User>("users");
-        query_object(&collection, id).await
+        query_object_optional(&collection, id).await
     }
 
     /// Entity resolver for product of specific UUID.
@@ -41,10 +41,10 @@ impl Query {
         &self,
         ctx: &Context<'a>,
         #[graphql(desc = "UUID of product to retrieve.")] id: Uuid,
-    ) -> Result<Product> {
+    ) -> Result<Option<Product>> {
         let db_client = ctx.data::<Database>()?;
         let collection: Collection<Product> = db_client.collection::<Product>("products");
-        query_object(&collection, id).await
+        query_object_optional(&collection, id).await
     }
 
     /// Entity resolver for product variant of specific UUID.
@@ -53,11 +53,11 @@ impl Query {
         &self,
         ctx: &Context<'a>,
         #[graphql(desc = "UUID of product variant to retrieve.")] id: Uuid,
-    ) -> Result<ProductVariant> {
+    ) -> Result<Option<ProductVariant>> {
         let db_client = ctx.data::<Database>()?;
         let collection: Collection<ProductVariant> =
             db_client.collection::<ProductVariant>("product_variants");
-        query_object(&collection, id).await
+        query_object_optional(&collection, id).await
     }
 
     /// Retrieves all reviews.
@@ -101,10 +101,10 @@ impl Query {
         &self,
         ctx: &Context<'a>,
         #[graphql(desc = "UUID of review to retrieve.")] id: Uuid,
-    ) -> Result<Review> {
+    ) -> Result<Option<Review>> {
         let db_client = ctx.data::<Database>()?;
         let collection: Collection<Review> = db_client.collection::<Review>("reviews");
-        query_object(&collection, id).await
+        query_object_optional(&collection, id).await
     }
 }
 
@@ -124,6 +124,24 @@ pub async fn query_object<T: for<'a> Deserialize<'a> + Unpin + Send + Sync>(
                 Err(Error::new(message))
             }
         },
+        Err(_) => {
+            let message = format!("{} with UUID: `{}` not found.", type_name::<T>(), id);
+            Err(Error::new(message))
+        }
+    }
+}
+
+/// Shared function to query an optional object: `T` from a MongoDB collection of object: `T`.
+/// Used, since reviews can be null initially if no review exists for a new product variant.
+///
+/// * `collection` - Collection to query
+/// * `id` - UUID of object.
+pub async fn query_object_optional<T: for<'a> Deserialize<'a> + Unpin + Send + Sync>(
+    collection: &Collection<T>,
+    id: Uuid,
+) -> Result<Option<T>> {
+    match collection.find_one(doc! {"_id": id }, None).await {
+        Ok(maybe_object) => Ok(maybe_object),
         Err(_) => {
             let message = format!("{} with UUID: `{}` not found.", type_name::<T>(), id);
             Err(Error::new(message))
