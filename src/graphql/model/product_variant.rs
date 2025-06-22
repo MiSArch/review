@@ -28,6 +28,7 @@ pub struct ProductVariant {
 #[ComplexObject]
 impl ProductVariant {
     /// Retrieves reviews of product variant.
+    // TODO reviews should be optional
     async fn reviews<'a>(
         &self,
         ctx: &Context<'a>,
@@ -65,9 +66,11 @@ impl ProductVariant {
     }
 
     /// Retrieves average rating of product variant.
-    async fn average_rating<'a>(&self, ctx: &Context<'a>) -> Result<f32> {
-        let review_connection = self.reviews(&ctx, None, None, None).await?;
-        calculate_average_rating(review_connection).await
+    async fn average_rating<'a>(&self, ctx: &Context<'a>) -> Option<f32> {
+        match self.reviews(ctx, None, None, None).await {
+            Ok(review_connection) => calculate_average_rating(review_connection).await,
+            Err(_) => None,
+        }
     }
 }
 
@@ -91,7 +94,7 @@ impl From<ProductVariantEventData> for ProductVariant {
 /// Filters reviews with `is_visible == false` to exclude them from the average rating.
 ///
 /// `review_connection` - Connection of reviews to calculate average rating for.
-pub async fn calculate_average_rating<'a>(review_connection: ReviewConnection) -> Result<f32> {
+pub async fn calculate_average_rating<'a>(review_connection: ReviewConnection) -> Option<f32> {
     let reviews = review_connection.nodes.clone();
     let (accumulated_reviews, total_count) =
         reviews.iter().filter(|review| review.is_visible).fold(
@@ -104,13 +107,9 @@ pub async fn calculate_average_rating<'a>(review_connection: ReviewConnection) -
             },
         );
     if total_count == 0 {
-        let message = format!(
-            "Average rating can not be calculated, no review exists in review connection:`{:?}`",
-            review_connection
-        );
-        Err(Error::new(message))
+        None
     } else {
         let average_rating = accumulated_reviews as f32 / total_count as f32;
-        Ok(average_rating)
+        Some(average_rating)
     }
 }
